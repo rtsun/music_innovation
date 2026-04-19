@@ -84,7 +84,7 @@ jobs:
 
     - name: Build APP with PyInstaller
       run: |
-        pyinstaller --windowed --noconfirm build.spec
+        pyinstaller --noconfirm build.spec
 
     - name: Prepare Artifacts
       run: |
