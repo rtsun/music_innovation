@@ -1,0 +1,57 @@
+name: Build Windows Desktop App
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller pywebview
+
+    - name: Build EXE with PyInstaller
+      run: |
+        pyinstaller build.spec
+
+    - name: Prepare Artifacts
+      run: |
+        mkdir dist\Music_Innovation_App
+        copy dist\Music_Innovation_Generator.exe dist\Music_Innovation_App\
+        copy .env.example dist\Music_Innovation_App\.env
+        mkdir dist\Music_Innovation_App\config
+        copy config\styles.yaml dist\Music_Innovation_App\config\
+      shell: cmd
+
+    - name: Download Windows FFmpeg (Optional but Recommended)
+      run: |
+        Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "ffmpeg.zip"
+        Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_extracted"
+        Copy-Item "ffmpeg_extracted\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe" -Destination "dist\Music_Innovation_App\"
+        Copy-Item "ffmpeg_extracted\ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe" -Destination "dist\Music_Innovation_App\"
+      shell: powershell
+
+    - name: Upload EXE artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: Music-Innovation-Windows-App
+        path: dist/Music_Innovation_App/
