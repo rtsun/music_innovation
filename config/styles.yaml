@@ -1,0 +1,35 @@
+- style_id: pop
+  label: 流行
+  lyrics_prompt_template: |
+    以“{keyword}”为主题，写一首流行歌曲的歌词。
+    结构要求：
+    包含 [Verse 1], [Chorus], [Verse 2], [Chorus], [Bridge], [Outro] 等段落标签。
+    情感基调要大众化，易于引起共鸣。
+  music_prompt: "pop, male vocal, acoustic guitar, gentle piano, catchy chorus, emotional, 90bpm"
+
+- style_id: hiphop
+  label: 嘻哈 / 说唱
+  lyrics_prompt_template: |
+    以“{keyword}”为主题，写一首嘻哈说唱风格的歌词。
+    结构要求：
+    包含 [Intro], [Verse 1], [Hook], [Verse 2], [Hook], [Outro] 等段落标签。
+    押韵要密集，节奏感强，态度鲜明。
+  music_prompt: "hip-hop, trap beat, male vocal, deep bass, fast flow, aggressive, 140bpm"
+
+- style_id: rock
+  label: 摇滚
+  lyrics_prompt_template: |
+    以“{keyword}”为主题，写一首摇滚风格的歌词。
+    结构要求：
+    包含 [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Guitar Solo], [Chorus], [Outro]。
+    情感要充满力量，追求自由与热血。
+  music_prompt: "rock, female vocal, electric guitar overdrive, heavy drums, energetic, passionate, 120bpm"
+
+- style_id: folk
+  label: 民谣
+  lyrics_prompt_template: |
+    以“{keyword}”为主题，写一首民谣风格的歌词。
+    结构要求：
+    包含 [Verse 1], [Verse 2], [Chorus], [Verse 3], [Outro]。
+    语言要像讲故事，带有诗意和一丝怀旧。
+  music_prompt: "folk, male vocal, pure acoustic guitar, soft percussion, storytelling, nostalgic, 80bpm"
