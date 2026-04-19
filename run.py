@@ -44,12 +44,17 @@ def start_server():
 def main():
     initialize_user_data()
     
-    # 确保自带的 ffmpeg.exe 能被找到
+    # 确保自带的 ffmpeg 能被找到
     data_dir = get_data_dir()
     os.environ["PATH"] = str(data_dir) + os.pathsep + os.environ.get("PATH", "")
     
     # Use pywebview to create a desktop window
     import webview
+    
+    # Enable High DPI support for macOS/Windows
+    if sys.platform == 'darwin':
+        # Disable web security for local file access if needed
+        webview.settings['ALLOW_FILE_URLS'] = True
     
     # Start server in daemon thread
     server_thread = threading.Thread(target=start_server, daemon=True)

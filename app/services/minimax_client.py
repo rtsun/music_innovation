@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 import httpx
 
 from app.config import Settings
@@ -9,46 +13,50 @@ class MiniMaxAPIError(Exception):
 
 class MiniMaxClient:
     def __init__(self, settings: Settings) -> None:
-        self.settings = settings
-        self.client = httpx.AsyncClient(
-            base_url=settings.minimax_base_url,
-            timeout=settings.request_timeout_seconds,
-        )
-
-    async def generate_lyrics(self, prompt: str) -> dict:
-        url = self.settings.minimax_lyrics_endpoint
-        headers = {
-            "Authorization": f"Bearer {self.settings.minimax_api_key}",
+        self._settings = settings
+        self._headers = {
+            "Authorization": f"Bearer {settings.minimax_api_key}",
             "Content-Type": "application/json",
         }
+
+    async def generate_lyrics(self, prompt: str) -> dict[str, Any]:
         payload = {
-            "model": self.settings.minimax_model,
+            "mode": "write_full_song",
             "prompt": prompt,
         }
-        try:
-            resp = await self.client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.HTTPError as exc:
-            raise MiniMaxAPIError(f"Lyrics generation failed: {exc}") from exc
+        return await self._post(self._settings.minimax_lyrics_endpoint, payload)
 
-    async def generate_music(self, lyrics: str, music_prompt: str) -> dict:
-        url = self.settings.minimax_music_endpoint
-        headers = {
-            "Authorization": f"Bearer {self.settings.minimax_api_key}",
-            "Content-Type": "application/json",
-        }
+    async def generate_music(self, lyrics: str, music_prompt: str) -> dict[str, Any]:
         payload = {
-            "model": self.settings.minimax_model,
+            "model": self._settings.minimax_model,
+            "prompt": music_prompt,
             "lyrics": lyrics,
-            "music_prompt": music_prompt,
-            "audio_format": self.settings.audio_format,
-            "sample_rate": self.settings.sample_rate,
-            "bitrate": self.settings.bitrate,
+            "output_format": "hex",
+            "audio_setting": {
+                "sample_rate": self._settings.sample_rate,
+                "bitrate": self._settings.bitrate,
+                "format": self._settings.audio_format,
+            },
         }
-        try:
-            resp = await self.client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.HTTPError as exc:
-            raise MiniMaxAPIError(f"Music generation failed: {exc}") from exc
+        return await self._post(self._settings.minimax_music_endpoint, payload)
+
+    async def _post(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+        timeout = httpx.Timeout(float(self._settings.request_timeout_seconds))
+        async with httpx.AsyncClient(
+            base_url=self._settings.minimax_base_url,
+            headers=self._headers,
+            timeout=timeout,
+        ) as client:
+            response = await client.post(endpoint, json=payload)
+            if response.status_code != 200:
+                raise MiniMaxAPIError(
+                    f"minimax http {response.status_code}: {response.text}"
+                )
+            data = response.json()
+
+        base_resp = data.get("base_resp", {})
+        status_code = base_resp.get("status_code", 0)
+        if status_code != 0:
+            status_msg = base_resp.get("status_msg", "unknown minimax api error")
+            raise MiniMaxAPIError(f"minimax status {status_code}: {status_msg}")
+        return data
