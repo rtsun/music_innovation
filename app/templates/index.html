@@ -1,0 +1,1611 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>景德镇 AI 音乐生成器</title>
+  <style>
+    :root {
+      /* 默认配色 - 主色调 (Dark 模式作为基础) */
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #2a2a2a;
+      --bg-tertiary: #3a3a3a;
+      --bg-card: #242424;
+      
+      /* 强调色 */
+      --accent: #06b6d4;
+      --accent-hover: #0891b2;
+      --accent-light: rgba(6, 182, 212, 0.15);
+      
+      /* 中性色 - 深灰/黑 */
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #888888;
+      --border: #404040;
+      --border-dark: #555555;
+      
+      /* 功能色 */
+      --danger: #ef4444;
+      --ok: #22c55e;
+      
+      /* 背景光效 */
+      --bgGlowA: rgba(6, 182, 212, 0.15);
+      --bgGlowB: rgba(6, 182, 212, 0.08);
+      
+      /* 歌词组件变量 */
+      --lyricSize: 16px;
+      --lyricLineHeight: 1.6;
+      --lyricActiveColor: #ffffff;
+      --lyricInactiveColor: rgba(255, 255, 255, 0.5);
+      --lyricHighlightShadow: #7c3aed;
+      
+      /* 动效参数 */
+      --bgSpeed: 18s;
+      --bgIntensity: 1;
+      --enterSpeed: 0.8s;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text-primary);
+      font-family: "Inter", "PingFang SC", "Hiragino Sans GB", Arial, sans-serif;
+      background:
+        radial-gradient(circle at 10% 20%, color-mix(in srgb, var(--bgGlowA) calc(var(--bgIntensity) * 100%), transparent), transparent 35%),
+        radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--bgGlowB) calc(var(--bgIntensity) * 100%), transparent), transparent 35%),
+        linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      background-size: 150% 150%, 150% 150%, 100% 100%;
+      background-attachment: fixed;
+      min-height: 100vh;
+      padding: 28px 16px;
+    }
+    .container { max-width: 1180px; margin: 0 auto; }
+    
+    /* Aon 品牌头部 (已改为通用设计) */
+    .brand-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--accent);
+    }
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      background: var(--accent);
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 24px;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.5px;
+    }
+    .brand-tagline {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    
+    #fxCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.3;
+    }
+    .bg-orb {
+      position: fixed;
+      width: 34vmax;
+      height: 34vmax;
+      border-radius: 999px;
+      pointer-events: none;
+      filter: blur(34px);
+      z-index: 0;
+      opacity: 0.15;
+      transition: transform 0.14s ease-out, opacity 0.14s ease-out;
+    }
+    #bgOrbA {
+      left: -10vmax;
+      top: -8vmax;
+      background: var(--accent);
+      transform: scale(var(--bgOrbScaleA, 1));
+    }
+    #bgOrbB {
+      right: -12vmax;
+      top: -10vmax;
+      background: var(--accent);
+      transform: scale(var(--bgOrbScaleB, 1));
+      opacity: 0.08;
+    }
+    #stageLights {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      mix-blend-mode: screen;
+    }
+    #stageLights.on { opacity: 0.7; }
+    .spotlight {
+      position: absolute;
+      width: 45vmax;
+      height: 45vmax;
+      border-radius: 50%;
+      filter: blur(24px);
+      opacity: 0.36;
+      transform: translate(-50%, -50%);
+    }
+    #spotA { background: rgba(255,255,255,0.55); left: 18%; top: -10%; animation: sweepA 4.8s ease-in-out infinite; }
+    #spotB { background: rgba(180,220,255,0.45); right: -12%; top: 8%; animation: sweepB 5.3s ease-in-out infinite; }
+    #spotC {
+      width: 58vmax;
+      height: 58vmax;
+      left: 50%;
+      top: 52%;
+      background: conic-gradient(from var(--rainbowRot, 0deg), #ff006e, #fb5607, #ffbe0b, #00f5d4, #3a86ff, #8338ec, #ff006e);
+      opacity: 0.32;
+      filter: blur(36px);
+      animation: spinRainbow 7.5s linear infinite;
+    }
+    .container { position: relative; z-index: 1; }
+    .hero {
+      margin-bottom: 16px;
+      padding: 20px;
+      border-radius: 12px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      animation: fadeUp calc(var(--enterSpeed) * 0.75) ease-out;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .hero-content { flex: 1; }
+    .hero h1 { margin: 0 0 6px 0; font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .hero p { margin: 0; color: var(--text-muted); font-size: 14px; }
+    .hero-actions { display: flex; gap: 12px; align-items: center; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      animation: fadeUp var(--enterSpeed) ease-out;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-card);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      padding: 20px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .panel.pulsing {
+      box-shadow:
+        0 2px 8px rgba(0,0,0,0.06),
+        0 0 0 2px var(--accent-light),
+        0 4px 16px var(--accent-light);
+      transform: translateY(var(--pulseY, -2px)) scale(var(--pulseScale, 1.01)) rotate(var(--pulseRotate, 0deg));
+    }
+    .panel.breathing {
+      box-shadow:
+        0 2px 8px rgba(0,0,0,0.06),
+        0 0 0 1px var(--accent-light),
+        0 2px 8px var(--accent-light);
+      transition: box-shadow 0.25s ease;
+    }
+    #lyrics {
+      box-shadow: inset 0 0 0 1px var(--border);
+      transition: box-shadow 0.12s linear, border-color 0.12s linear;
+    }
+    .panel:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+    .panel h2 { margin: 0 0 16px; font-size: 18px; font-weight: 600; color: var(--text-primary); border-left: 3px solid var(--accent); padding-left: 12px; }
+    .field { margin-bottom: 16px; }
+    label { display:block; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); font-size: 14px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      font-size: 14px;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+    input::placeholder, textarea::placeholder { color: var(--text-muted); }
+    textarea { min-height: 170px; resize: vertical; }
+    #customStylePrompt { min-height: 90px; }
+    .mode-row { display:flex; gap:16px; flex-wrap: wrap; }
+    .mode-item {
+      display:flex; align-items:center; gap:6px;
+      font-weight:400; color: var(--text-secondary);
+      padding: 4px 0;
+      font-size: 13px;
+    }
+    .mode-item input { width: auto; }
+    .actions { display:flex; gap:12px; flex-wrap:wrap; margin-bottom: 16px; }
+    button {
+      border: 0;
+      color: #fff;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 12px 20px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      font-size: 14px;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--accent);
+      box-shadow: 0 4px 12px rgba(218, 41, 28, 0.3);
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 6px 16px rgba(218, 41, 28, 0.4);
+    }
+    .btn-secondary {
+      background: var(--text-secondary);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .btn-secondary:hover {
+      background: var(--text-primary);
+    }
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    .meta { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom: 16px; }
+    .meta-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--bg-secondary);
+    }
+    .meta-item b { display:block; margin-bottom:4px; color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+    .audio-box { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom: 16px; }
+    .audio-box audio { flex: 1; min-width: 200px; border-radius: 8px; }
+    #downloadLink {
+      display:inline-block;
+      color: #fff;
+      text-decoration: none;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 8px 14px;
+      background: var(--accent);
+      transition: background 0.2s ease;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    #downloadLink:hover { background: var(--accent-hover); }
+    #downloadLrcLink {
+      display:none;
+      color: #fff;
+      text-decoration: none;
+      border: 1px solid var(--text-secondary);
+      border-radius: 8px;
+      padding: 8px 14px;
+      background: var(--text-secondary);
+      transition: background 0.2s ease;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    #downloadLrcLink:hover { background: var(--text-primary); }
+    .lyrics-sync-box {
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 140px 0;
+      height: 400px;
+      overflow-y: auto;
+      background: var(--bg-secondary);
+      position: relative;
+      scroll-behavior: smooth;
+      text-align: center;
+      mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+    }
+    .lyrics-line {
+      padding: 12px 20px;
+      margin: 2px 0;
+      font-size: var(--lyricSize);
+      line-height: var(--lyricLineHeight);
+      color: var(--lyricInactiveColor);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transform: scale(0.90);
+      filter: blur(0.6px);
+      cursor: default;
+      opacity: 0.45;
+    }
+    .lyrics-line.nearby,
+    .lyrics-line.active {
+      color: var(--lyricActiveColor);
+      font-weight: 700;
+      transform: scale(1.15);
+      filter: blur(0);
+      opacity: 1;
+      text-shadow: 0 0 20px var(--lyricHighlightShadow);
+    }
+    #status {
+      margin-top: 12px;
+      min-height: 22px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      font-size: 13px;
+    }
+    .error { color: var(--danger); border-color: rgba(211, 47, 47, 0.3); background: rgba(211, 47, 47, 0.08); }
+    .ok { color: var(--ok); border-color: rgba(46, 125, 50, 0.3); background: rgba(46, 125, 50, 0.08); }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    #historyList { list-style: none; padding: 0; margin: 0; }
+    .history-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: var(--bg-primary);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .history-item:hover { border-color: var(--accent); }
+    .history-meta { font-size: 12px; color: var(--text-muted); }
+    .history-links a { color: var(--accent); text-decoration: none; margin-left: 8px; font-size: 13px; }
+    .history-links a:hover { text-decoration: underline; }
+    .history-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-light);
+    }
+    .skin-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .theme-toggle {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: auto;
+      z-index: 3;
+    }
+    .theme-drawer {
+      position: fixed;
+      top: 74px;
+      right: 18px;
+      width: min(760px, calc(100vw - 36px));
+      max-height: calc(100vh - 92px);
+      overflow: auto;
+      transform: translateY(-8px) scale(0.98);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.2s ease;
+      z-index: 4;
+    }
+    .theme-drawer.open {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .skin-tips {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .chip {
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      padding: 6px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .chip:hover { background: var(--border); }
+    .span-2 { grid-column: span 2; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .span-2 { grid-column: span 1; }
+      .meta { grid-template-columns: 1fr; }
+      .skin-grid { grid-template-columns: 1fr; }
+      .theme-drawer {
+        top: 66px;
+        right: 12px;
+        width: calc(100vw - 24px);
+      }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes bgShift {
+      from { background-position: 0% 0%, 100% 0%, 50% 50%; }
+      to { background-position: 12% 8%, 85% 10%, 50% 50%; }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes sweepA {
+      0% { left: 12%; top: -12%; transform: translate(-50%, -50%) rotate(-8deg) scale(0.95); }
+      50% { left: 78%; top: 6%; transform: translate(-50%, -50%) rotate(8deg) scale(1.08); }
+      100% { left: 12%; top: -12%; transform: translate(-50%, -50%) rotate(-8deg) scale(0.95); }
+    }
+    @keyframes sweepB {
+      0% { right: -12%; top: 10%; transform: translate(50%, -50%) rotate(6deg) scale(1.02); }
+      50% { right: 58%; top: -6%; transform: translate(50%, -50%) rotate(-10deg) scale(0.92); }
+      100% { right: -12%; top: 10%; transform: translate(50%, -50%) rotate(6deg) scale(1.02); }
+    }
+    @keyframes spinRainbow {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fxCanvas"></canvas>
+  <div id="bgOrbA" class="bg-orb"></div>
+  <div id="bgOrbB" class="bg-orb"></div>
+  <div id="stageLights">
+    <div id="spotA" class="spotlight"></div>
+    <div id="spotB" class="spotlight"></div>
+    <div id="spotC" class="spotlight"></div>
+  </div>
+  <main class="container">
+    <div class="brand-header">
+      <div class="brand-logo">景</div>
+      <div class="brand-text">
+        <span class="brand-name">景德镇</span>
+        <span class="brand-tagline">AI 音乐生成器</span>
+      </div>
+    </div>
+    
+    <section class="hero">
+      <div class="hero-content">
+        <h1>创作工坊</h1>
+        <p>输入关键词，生成歌词与歌曲，支持自定义风格、历史记录和下载。</p>
+      </div>
+      <div class="hero-actions">
+        <button id="themeToggleBtn" type="button" class="btn-secondary theme-toggle">主题设置</button>
+        <a href="/history" style="color: var(--accent); text-decoration: none; border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;">历史查询页</a>
+      </div>
+    </section>
+
+    <div id="themeDrawer" class="panel theme-drawer">
+        <h2>高级皮肤</h2>
+        <div class="skin-grid">
+          <div class="field">
+            <label for="themeMode">主题模式</label>
+            <select id="themeMode">
+              <option value="dark">Dark Neon</option>
+              <option value="light">Light Glass</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="accentColor">主色</label>
+            <input id="accentColor" type="color" value="#06b6d4" />
+          </div>
+          <div class="field">
+            <label for="accentColor2">副色</label>
+            <input id="accentColor2" type="color" value="#06b6d4" />
+          </div>
+          <div class="field">
+            <label for="bgSpeed">背景速度</label>
+            <input id="bgSpeed" type="range" min="6" max="40" step="1" value="18" />
+          </div>
+          <div class="field">
+            <label for="bgIntensity">背景强度</label>
+            <input id="bgIntensity" type="range" min="40" max="140" step="5" value="100" />
+          </div>
+          <div class="field">
+            <label for="enterSpeed">入场动画速度</label>
+            <input id="enterSpeed" type="range" min="40" max="180" step="5" value="80" />
+          </div>
+          <div class="field">
+            <label for="particleFx">粒子背景</label>
+            <select id="particleFx">
+              <option value="on">开启</option>
+              <option value="off">关闭</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="musicPulse">音乐脉冲</label>
+            <select id="musicPulse">
+              <option value="on">开启</option>
+              <option value="off">关闭</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pulseLevel">抖动强度</label>
+            <select id="pulseLevel">
+              <option value="light">轻度</option>
+              <option value="medium" selected>中度</option>
+              <option value="heavy">重度</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="stageMode">舞台模式</label>
+            <select id="stageMode">
+              <option value="off">关闭</option>
+              <option value="on">开启（聚光+彩灯）</option>
+            </select>
+          </div>
+        </div>
+        
+        <h2>歌词样式</h2>
+        <div class="skin-grid">
+          <div class="field">
+            <label for="lyricSize">字体大小</label>
+            <input id="lyricSize" type="range" min="12" max="32" step="1" value="16" />
+          </div>
+          <div class="field">
+            <label for="lyricLineHeight">行高</label>
+            <input id="lyricLineHeight" type="range" min="1.0" max="3.0" step="0.1" value="1.6" />
+          </div>
+          <div class="field">
+            <label for="lyricActiveColor">高亮颜色</label>
+            <input id="lyricActiveColor" type="color" value="#ffffff" />
+          </div>
+          <div class="field">
+            <label for="lyricHighlightShadow">光晕颜色</label>
+            <input id="lyricHighlightShadow" type="color" value="#06b6d4" />
+          </div>
+        </div>
+
+        <div class="skin-grid">
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="resetSkinBtn" type="button" class="btn-secondary">恢复默认皮肤</button>
+          </div>
+        </div>
+        <div class="chip-row">
+          <button class="chip" type="button" data-preset="default">Default</button>
+          <button class="chip" type="button" data-preset="aurora">Aurora</button>
+          <button class="chip" type="button" data-preset="sunset">Sunset</button>
+          <button class="chip" type="button" data-preset="ocean">Ocean</button>
+          <button class="chip" type="button" data-preset="mono">Mono</button>
+        </div>
+        <div class="skin-tips">皮肤设置会自动保存在浏览器本地，下次打开仍生效。</div>
+      </div>
+
+    <section class="grid">
+
+      <div class="panel">
+        <h2>1. 创作配置</h2>
+        <div class="field">
+          <label for="keyword">关键词</label>
+          <input id="keyword" placeholder="例如：海边、夏天、约定" />
+        </div>
+        <div class="field">
+          <label for="style">风格模板</label>
+          <select id="style">
+            {% for style in styles %}
+            <option value="{{ style.style_id }}" {% if style.style_id == default_style_id %}selected{% endif %}>{{ style.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="customStylePrompt">自定义风格（可选）</label>
+          <textarea id="customStylePrompt" placeholder="例如：female vocal, dreamy synth, 96bpm, late-night city vibe"></textarea>
+        </div>
+        <div class="field">
+          <label>自定义风格模式</label>
+          <div class="mode-row">
+            <label class="mode-item"><input type="radio" name="customStyleMode" value="append" checked />append（追加）</label>
+            <label class="mode-item"><input type="radio" name="customStyleMode" value="override" />override（仅自定义）</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>2. 生成控制</h2>
+        <div class="actions">
+          <button id="btnLyrics" class="btn-primary">生成歌词</button>
+          <button id="btnMusic" class="btn-secondary">生成歌曲</button>
+        </div>
+        <div class="meta">
+          <div class="meta-item"><b>歌曲标题</b><span id="songTitle">-</span></div>
+          <div class="meta-item"><b>风格标签</b><span id="styleTags">-</span></div>
+        </div>
+        <div class="field">
+          <label for="lyrics">歌词编辑区</label>
+          <textarea id="lyrics" placeholder="先生成歌词，也可以手动修改后再生成歌曲"></textarea>
+        </div>
+        <div id="status"></div>
+      </div>
+
+      <div class="panel">
+        <h2>3. 结果播放与下载</h2>
+        <div class="audio-box">
+          <audio id="player" controls style="width: 100%;"></audio>
+          <a id="downloadLink" href="#" download>下载当前歌曲</a>
+          <a id="downloadLrcLink" href="#" download>下载时间轴歌词(.lrc)</a>
+        </div>
+        <div id="lyricsSyncBox" class="lyrics-sync-box"></div>
+      </div>
+
+      <div class="panel">
+        <h2>4. 最近生成记录</h2>
+        <ul id="historyList"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const keywordEl = document.getElementById("keyword");
+    const styleEl = document.getElementById("style");
+    const customStylePromptEl = document.getElementById("customStylePrompt");
+    const lyricsEl = document.getElementById("lyrics");
+    const songTitleEl = document.getElementById("songTitle");
+    const styleTagsEl = document.getElementById("styleTags");
+    const statusEl = document.getElementById("status");
+    const playerEl = document.getElementById("player");
+    const downloadLinkEl = document.getElementById("downloadLink");
+    const downloadLrcLinkEl = document.getElementById("downloadLrcLink");
+    const lyricsSyncBoxEl = document.getElementById("lyricsSyncBox");
+    const btnLyrics = document.getElementById("btnLyrics");
+    const btnMusic = document.getElementById("btnMusic");
+    const customStyleModeEls = document.querySelectorAll('input[name="customStyleMode"]');
+    const historyListEl = document.getElementById("historyList");
+    const themeModeEl = document.getElementById("themeMode");
+    const accentColorEl = document.getElementById("accentColor");
+    const accentColor2El = document.getElementById("accentColor2");
+    const bgSpeedEl = document.getElementById("bgSpeed");
+    const bgIntensityEl = document.getElementById("bgIntensity");
+    const resetSkinBtn = document.getElementById("resetSkinBtn");
+    const presetButtons = document.querySelectorAll("[data-preset]");
+    const enterSpeedEl = document.getElementById("enterSpeed");
+    const particleFxEl = document.getElementById("particleFx");
+    const musicPulseEl = document.getElementById("musicPulse");
+    const pulseLevelEl = document.getElementById("pulseLevel");
+    const stageModeEl = document.getElementById("stageMode");
+    const lyricSizeEl = document.getElementById("lyricSize");
+    const lyricLineHeightEl = document.getElementById("lyricLineHeight");
+    const lyricActiveColorEl = document.getElementById("lyricActiveColor");
+    const lyricHighlightShadowEl = document.getElementById("lyricHighlightShadow");
+    const fxCanvas = document.getElementById("fxCanvas");
+    const panels = document.querySelectorAll(".grid .panel");
+    const bgOrbAEl = document.getElementById("bgOrbA");
+    const bgOrbBEl = document.getElementById("bgOrbB");
+    const stageLightsEl = document.getElementById("stageLights");
+    const themeToggleBtn = document.getElementById("themeToggleBtn");
+    const themeDrawer = document.getElementById("themeDrawer");
+    const SKIN_KEY = "lyrics-to-song-skin";
+    const HISTORY_CACHE_KEY = "lyrics-to-song-history-cache";
+    let fxAnimationId = null;
+    let particles = [];
+    let sparkBursts = [];
+    let audioCtx = null;
+    let analyser = null;
+    let sourceNode = null;
+    let pulseAnimationId = null;
+    let currentLyricsTimeline = [];
+    let audioDebugMode = false;
+    let volumeVisualizerCtx = null;
+    let volumeVisualizerAnalyser = null;
+    let volumeVisualizerCanvas = null;
+    let volumeVisualizerId = null;
+    let isAudioContextReady = false;
+
+    function logAudioDebug(...args) {
+      if (audioDebugMode) {
+        console.log("[AudioDebug]", new Date().toISOString(), ...args);
+      }
+    }
+
+    function initAudioDebugCanvas() {
+      if (volumeVisualizerCanvas) return;
+      volumeVisualizerCanvas = document.createElement("canvas");
+      volumeVisualizerCanvas.id = "volumeDebugCanvas";
+      volumeVisualizerCanvas.width = 280;
+      volumeVisualizerCanvas.height = 60;
+      volumeVisualizerCanvas.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:9999;background:rgba(0,0,0,0.7);border-radius:8px;cursor:pointer;";
+      volumeVisualizerCanvas.title = "点击关闭音频调试";
+      document.body.appendChild(volumeVisualizerCanvas);
+      volumeVisualizerCanvas.addEventListener("click", () => {
+        audioDebugMode = false;
+        if (volumeVisualizerId) cancelAnimationFrame(volumeVisualizerId);
+        if (volumeVisualizerCanvas) {
+          volumeVisualizerCanvas.remove();
+          volumeVisualizerCanvas = null;
+        }
+      });
+    }
+
+    function drawVolumeVisualizer(dataArray) {
+      if (!volumeVisualizerCanvas) return;
+      const ctx = volumeVisualizerCanvas.getContext("2d");
+      const w = volumeVisualizerCanvas.width;
+      const h = volumeVisualizerCanvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fillRect(0, 0, w, h);
+
+      const barWidth = w / dataArray.length;
+      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+      ctx.fillStyle = `rgb(${Math.round(avg * 1.5)},${Math.round(200 - avg)},100)`;
+      for (let i = 0; i < dataArray.length; i++) {
+        const barHeight = (dataArray[i] / 255) * h;
+        ctx.fillRect(i * barWidth, h - barHeight, barWidth - 1, barHeight);
+      }
+      ctx.fillStyle = "#fff";
+      ctx.font = "10px monospace";
+      ctx.fillText(`VOL: ${Math.round((playerEl.volume || 0) * 100)}% | MUTED: ${playerEl.muted} | AVG: ${Math.round(avg)}`, 6, 14);
+      ctx.fillText(`PAUSED: ${playerEl.paused} | READY: ${playerEl.readyState >= 3} | SRC: ${playerEl.src ? "SET" : "EMPTY"}`, 6, 28);
+    }
+
+    async function ensureAudioContext() {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new Ctx();
+        logAudioDebug("AudioContext created, state:", audioCtx.state);
+      }
+      if (audioCtx.state === "suspended") {
+        logAudioDebug("AudioContext suspended, resuming...");
+        await audioCtx.resume();
+        logAudioDebug("AudioContext resumed, state:", audioCtx.state);
+      }
+      isAudioContextReady = audioCtx.state === "running";
+      return audioCtx;
+    }
+
+    async function setupAudioPulse() {
+      try {
+        await ensureAudioContext();
+      } catch (e) {
+        logAudioDebug("ensureAudioContext failed:", e);
+      }
+      if (!window.AudioContext && !window.webkitAudioContext) {
+        logAudioDebug("Web Audio API not supported");
+        return;
+      }
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (!analyser) {
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 128;
+        analyser.smoothingTimeConstant = 0.8;
+      }
+      if (!sourceNode || sourceNode.mediaElement !== playerEl) {
+        if (sourceNode) {
+          try { sourceNode.disconnect(); } catch (e) { /* ignore */ }
+        }
+        sourceNode = audioCtx.createMediaElementSource(playerEl);
+        sourceNode.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        logAudioDebug("sourceNode recreated and connected");
+      }
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const pulse = () => {
+        if (audioDebugMode && analyser) {
+          analyser.getByteFrequencyData(dataArray);
+          drawVolumeVisualizer(dataArray);
+        }
+        const skin = getSkinFromControls();
+        if (skin.musicPulse !== "on" || playerEl.paused) {
+          panels.forEach((p) => p.classList.remove("pulsing"));
+          pulseAnimationId = requestAnimationFrame(pulse);
+          return;
+        }
+        if (!analyser) {
+          pulseAnimationId = requestAnimationFrame(pulse);
+          return;
+        }
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        const bass = (dataArray[2] + dataArray[3] + dataArray[4]) / 3;
+        const energy = Math.min(1, Math.max(avg, bass) / 160);
+        const level = pulseLevelEl.value || "light";
+        const profile = {
+          light: { threshold: 0.26, y: 4, scale: 0.02, rotate: 0.45, breathingThreshold: 0.16 },
+          medium: { threshold: 0.18, y: 12, scale: 0.09, rotate: 1.8 },
+          heavy: { threshold: 0.14, y: 18, scale: 0.14, rotate: 3.0 },
+        }[level] || { threshold: 0.26, y: 4, scale: 0.02, rotate: 0.45, breathingThreshold: 0.16 };
+        const stageMode = stageModeEl.value === "on";
+        const styleFactor = stageMode
+          ? { y: 1.35, scale: 1.3, rotate: 1.5, thresholdBias: -0.03, parityShift: 1, pulseAll: true }
+          : { y: 0.9, scale: 0.9, rotate: 0.8, thresholdBias: 0.02, parityShift: 0, pulseAll: false };
+        const threshold = Math.max(0.06, profile.threshold + styleFactor.thresholdBias);
+        const shouldPulse = energy > threshold;
+        const shouldBreath = energy > (profile.breathingThreshold || (threshold * 0.85));
+        const pulseY = `${-(2 + energy * profile.y * styleFactor.y)}px`;
+        const pulseScale = `${1 + energy * profile.scale * styleFactor.scale}`;
+        const pulseRotate = `${(energy * profile.rotate * styleFactor.rotate).toFixed(2)}deg`;
+        document.documentElement.style.setProperty("--pulseY", pulseY);
+        document.documentElement.style.setProperty("--pulseScale", pulseScale);
+        document.documentElement.style.setProperty("--pulseRotate", pulseRotate);
+
+        const lyricsGlow = 6 + Math.round(energy * (level === "heavy" ? 24 : level === "medium" ? 16 : 10));
+        const lyricsAlpha = 0.16 + energy * (level === "heavy" ? 0.52 : level === "medium" ? 0.40 : 0.28);
+        lyricsEl.style.borderColor = `rgba(34, 211, 238, ${Math.min(0.95, lyricsAlpha).toFixed(2)})`;
+        lyricsEl.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.12), 0 0 ${lyricsGlow}px rgba(34, 211, 238, ${Math.min(0.7, lyricsAlpha).toFixed(2)})`;
+
+        const orbBoost = stageMode ? 0.35 : 0.18;
+        const orbA = 1 + energy * orbBoost;
+        const orbB = 1 + Math.max(0, energy - 0.05) * (orbBoost + 0.04);
+        document.documentElement.style.setProperty("--bgOrbScaleA", orbA.toFixed(3));
+        document.documentElement.style.setProperty("--bgOrbScaleB", orbB.toFixed(3));
+        bgOrbAEl.style.opacity = `${0.22 + energy * 0.26}`;
+        bgOrbBEl.style.opacity = `${0.20 + energy * 0.24}`;
+
+        if (bass > 190 && Math.random() < 0.20 && sparkBursts.length < 30) {
+          const count = stageMode ? 5 : 3;
+          for (let i = 0; i < count; i += 1) {
+            sparkBursts.push({
+              x: Math.random() * fxCanvas.width,
+              y: Math.random() * fxCanvas.height,
+              vx: (Math.random() - 0.5) * 2.2,
+              vy: (Math.random() - 0.5) * 2.2,
+              r: Math.random() * 1.8 + 0.8,
+              life: 16 + Math.floor(Math.random() * 10),
+              maxLife: 24,
+            });
+          }
+        }
+
+        if (stageMode && !playerEl.paused) {
+          stageLightsEl.classList.add("on");
+          document.documentElement.style.setProperty("--rainbowRot", `${Math.round(energy * 120)}deg`);
+          stageLightsEl.style.opacity = `${0.38 + energy * 0.48}`;
+        } else {
+          stageLightsEl.classList.remove("on");
+          stageLightsEl.style.opacity = "0";
+        }
+
+        panels.forEach((p, idx) => {
+          const laneMatch = styleFactor.pulseAll || (idx % 2 === (Math.round(avg) + styleFactor.parityShift) % 2);
+          if (shouldPulse && laneMatch) p.classList.add("pulsing");
+          else p.classList.remove("pulsing");
+          if (!shouldPulse && shouldBreath) p.classList.add("breathing");
+          else p.classList.remove("breathing");
+        });
+        pulseAnimationId = requestAnimationFrame(pulse);
+      };
+      if (!pulseAnimationId) pulse();
+    }
+
+    async function tryPlayWithDebug() {
+      logAudioDebug("Attempting to play. State:", {
+        paused: playerEl.paused,
+        muted: playerEl.muted,
+        volume: playerEl.volume,
+        readyState: playerEl.readyState,
+        src: playerEl.src ? "SET" : "EMPTY",
+        audioCtxState: audioCtx ? audioCtx.state : "null",
+      });
+      try {
+        await ensureAudioContext();
+        const playPromise = playerEl.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            logAudioDebug("Playback started successfully");
+            setStatus("播放中");
+          }).catch(async (err) => {
+            logAudioDebug("Play promise rejected:", err.message, "- Trying resume...");
+            if (audioCtx && audioCtx.state === "suspended") {
+              await audioCtx.resume();
+              logAudioDebug("AudioContext resumed after rejection, retrying play");
+              await playerEl.play().catch((e2) => logAudioDebug("Retry failed:", e2.message));
+            } else {
+              setStatus(`播放失败：${err.message}（可能是浏览器自动播放策略限制）`, true);
+            }
+          });
+        }
+      } catch (err) {
+        logAudioDebug("tryPlayWithDebug error:", err.message);
+        setStatus(`播放异常：${err.message}`, true);
+      }
+    }
+
+    function setStatus(message, isError = false, loading = false) {
+      statusEl.className = isError ? "error" : "ok";
+      statusEl.innerHTML = loading ? `<span class="spinner"></span>${message}` : message;
+    }
+
+    function formatAlignmentMode(mode) {
+      if (mode === "whisperx") return "WhisperX 真实对齐";
+      if (mode === "linear-estimation") return "线性估算时间轴";
+      if (mode === "estimated") return "估算时间轴";
+      if (mode === "disabled") return "未启用对齐";
+      return "未知对齐模式";
+    }
+
+    function hexToRgba(hex, alpha) {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function adjustColor(hex, amount) {
+      const r = Math.max(0, Math.min(255, parseInt(hex.slice(1, 3), 16) + amount));
+      const g = Math.max(0, Math.min(255, parseInt(hex.slice(3, 5), 16) + amount));
+      const b = Math.max(0, Math.min(255, parseInt(hex.slice(5, 7), 16) + amount));
+      return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+    }
+
+    async function postJSON(url, body) {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: "request failed" }));
+        throw new Error(err.detail || "request failed");
+      }
+      return resp.json();
+    }
+
+    function applySkin(skin) {
+      const root = document.documentElement;
+      root.style.setProperty("--accent", skin.accent || "#da291c");
+      root.style.setProperty("--accent-hover", skin.accent ? adjustColor(skin.accent, -20) : "#b8231a");
+      root.style.setProperty("--accent-light", skin.accent ? hexToRgba(skin.accent, 0.1) : "rgba(218, 41, 28, 0.1)");
+      root.style.setProperty("--accent2", skin.accent2 || "#da291c");
+      root.style.setProperty("--bgSpeed", `${skin.bgSpeed || 18}s`);
+      root.style.setProperty("--bgIntensity", `${(skin.bgIntensity || 100) / 100}`);
+      root.style.setProperty("--enterSpeed", `${(skin.enterSpeed || 80) / 100}s`);
+
+      root.style.setProperty("--lyricSize", `${skin.lyricSize || 16}px`);
+      root.style.setProperty("--lyricLineHeight", skin.lyricLineHeight || 1.6);
+      root.style.setProperty("--lyricActiveColor", skin.lyricActiveColor || "#1a1a1a");
+      root.style.setProperty("--lyricHighlightShadow", skin.lyricHighlightShadow || skin.accent || "#da291c");
+
+      if ((skin.themeMode || "light") === "dark") {
+        root.style.setProperty("--bg-primary", "#1a1a1a");
+        root.style.setProperty("--bg-secondary", "#2a2a2a");
+        root.style.setProperty("--bg-tertiary", "#3a3a3a");
+        root.style.setProperty("--bg-card", "#242424");
+        root.style.setProperty("--border", "#404040");
+        root.style.setProperty("--border-dark", "#555555");
+        root.style.setProperty("--text-primary", "#ffffff");
+        root.style.setProperty("--text-secondary", "#cccccc");
+        root.style.setProperty("--text-muted", "#888888");
+        root.style.setProperty("--bgGlowA", "rgba(6, 182, 212, 0.15)");
+        root.style.setProperty("--bgGlowB", "rgba(6, 182, 212, 0.08)");
+        root.style.setProperty("--lyricActiveColor", "#ffffff");
+        root.style.setProperty("--lyricInactiveColor", "rgba(255, 255, 255, 0.5)");
+      } else {
+        root.style.setProperty("--bg-primary", "#ffffff");
+        root.style.setProperty("--bg-secondary", "#f5f5f5");
+        root.style.setProperty("--bg-tertiary", "#eeeeee");
+        root.style.setProperty("--bg-card", "#ffffff");
+        root.style.setProperty("--border", "#e0e0e0");
+        root.style.setProperty("--border-dark", "#cccccc");
+        root.style.setProperty("--text-primary", "#1a1a1a");
+        root.style.setProperty("--text-secondary", "#4a4a4a");
+        root.style.setProperty("--text-muted", "#7a7a7a");
+        root.style.setProperty("--bgGlowA", "rgba(6, 182, 212, 0.08)");
+        root.style.setProperty("--bgGlowB", "rgba(6, 182, 212, 0.05)");
+        root.style.setProperty("--lyricActiveColor", "#1a1a1a");
+        root.style.setProperty("--lyricInactiveColor", "rgba(26, 26, 26, 0.4)");
+      }
+    }
+
+    function getSkinFromControls() {
+      return {
+        themeMode: themeModeEl.value,
+        accent: accentColorEl.value,
+        accent2: accentColor2El.value,
+        bgSpeed: Number(bgSpeedEl.value),
+        bgIntensity: Number(bgIntensityEl.value),
+        enterSpeed: Number(enterSpeedEl.value),
+        particleFx: particleFxEl.value,
+        musicPulse: musicPulseEl.value,
+        pulseLevel: pulseLevelEl.value,
+        stageMode: stageModeEl.value,
+        lyricSize: Number(lyricSizeEl.value),
+        lyricLineHeight: Number(lyricLineHeightEl.value),
+        lyricActiveColor: lyricActiveColorEl.value,
+        lyricHighlightShadow: lyricHighlightShadowEl.value,
+      };
+    }
+
+    function saveSkin() {
+      localStorage.setItem(SKIN_KEY, JSON.stringify(getSkinFromControls()));
+    }
+
+    function setControlsFromSkin(skin) {
+      themeModeEl.value = skin.themeMode || "dark";
+      accentColorEl.value = skin.accent || "#06b6d4";
+      accentColor2El.value = skin.accent2 || "#06b6d4";
+      bgSpeedEl.value = String(skin.bgSpeed || 18);
+      bgIntensityEl.value = String(skin.bgIntensity || 100);
+      enterSpeedEl.value = String(skin.enterSpeed || 80);
+      particleFxEl.value = skin.particleFx || "on";
+      musicPulseEl.value = skin.musicPulse || "on";
+      pulseLevelEl.value = skin.pulseLevel || "medium";
+      stageModeEl.value = skin.stageMode || "off";
+      lyricSizeEl.value = String(skin.lyricSize || 16);
+      lyricLineHeightEl.value = String(skin.lyricLineHeight || 1.6);
+      lyricActiveColorEl.value = skin.lyricActiveColor || "#ffffff";
+      lyricHighlightShadowEl.value = skin.lyricHighlightShadow || skin.accent || "#06b6d4";
+    }
+
+    function initParticles() {
+      const ctx = fxCanvas.getContext("2d");
+      if (!ctx) return;
+
+      const resize = () => {
+        fxCanvas.width = window.innerWidth;
+        fxCanvas.height = window.innerHeight;
+        const count = Math.max(24, Math.floor(window.innerWidth / 55));
+        particles = Array.from({ length: count }, () => ({
+          x: Math.random() * fxCanvas.width,
+          y: Math.random() * fxCanvas.height,
+          r: Math.random() * 2 + 0.8,
+          vx: (Math.random() - 0.5) * 0.45,
+          vy: (Math.random() - 0.5) * 0.45,
+        }));
+        sparkBursts = [];
+      };
+
+      const draw = () => {
+        const skin = getSkinFromControls();
+        if (skin.particleFx !== "on") {
+          ctx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+          fxAnimationId = requestAnimationFrame(draw);
+          return;
+        }
+        ctx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+        ctx.fillStyle = skin.themeMode === "light" ? "rgba(14,165,233,0.20)" : "rgba(255,255,255,0.20)";
+        for (const p of particles) {
+          p.x += p.vx;
+          p.y += p.vy;
+          if (p.x < 0 || p.x > fxCanvas.width) p.vx *= -1;
+          if (p.y < 0 || p.y > fxCanvas.height) p.vy *= -1;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (sparkBursts.length > 0) {
+          for (let i = sparkBursts.length - 1; i >= 0; i -= 1) {
+            const b = sparkBursts[i];
+            b.life -= 1;
+            b.x += b.vx;
+            b.y += b.vy;
+            ctx.fillStyle = `rgba(255,255,255,${Math.max(0, b.life / b.maxLife) * 0.65})`;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fill();
+            if (b.life <= 0) sparkBursts.splice(i, 1);
+          }
+        }
+        fxAnimationId = requestAnimationFrame(draw);
+      };
+
+      window.addEventListener("resize", resize);
+      resize();
+      draw();
+    }
+
+    function setupSkin() {
+      const saved = localStorage.getItem(SKIN_KEY);
+      const defaults = {
+        themeMode: "dark",
+        accent: "#06b6d4",
+        accent2: "#06b6d4",
+        bgSpeed: 18,
+        bgIntensity: 100,
+        enterSpeed: 80,
+        particleFx: "on",
+        musicPulse: "on",
+        pulseLevel: "medium",
+        stageMode: "off",
+        lyricSize: 16,
+        lyricLineHeight: 1.6,
+        lyricActiveColor: "#ffffff",
+        lyricHighlightShadow: "#06b6d4",
+      };
+      const skin = saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+      setControlsFromSkin(skin);
+      applySkin(skin);
+
+      [themeModeEl, accentColorEl, accentColor2El, bgSpeedEl, bgIntensityEl, enterSpeedEl, particleFxEl, musicPulseEl, pulseLevelEl, stageModeEl, lyricSizeEl, lyricLineHeightEl, lyricActiveColorEl, lyricHighlightShadowEl].forEach((el) => {
+        el.addEventListener("input", () => {
+          const current = getSkinFromControls();
+          applySkin(current);
+          saveSkin();
+        });
+      });
+
+      resetSkinBtn.addEventListener("click", () => {
+        localStorage.removeItem(SKIN_KEY);
+        setControlsFromSkin(defaults);
+        applySkin(defaults);
+        setStatus("皮肤已恢复默认");
+      });
+
+      /* 主题预设 */
+      const presets = {
+        default: { themeMode: "dark", accent: "#06b6d4", accent2: "#06b6d4", bgSpeed: 18, bgIntensity: 100, enterSpeed: 80, particleFx: "on", musicPulse: "on", pulseLevel: "medium", stageMode: "off", lyricSize: 16, lyricLineHeight: 1.6, lyricActiveColor: "#ffffff", lyricHighlightShadow: "#06b6d4" },
+        aurora: { themeMode: "light", accent: "#c41e3a", accent2: "#c41e3a", bgSpeed: 16, bgIntensity: 110, enterSpeed: 75, particleFx: "on", musicPulse: "on", pulseLevel: "medium", stageMode: "off", lyricSize: 18, lyricLineHeight: 1.5, lyricActiveColor: "#1a1a1a", lyricHighlightShadow: "#c41e3a" },
+        sunset: { themeMode: "light", accent: "#e65100", accent2: "#e65100", bgSpeed: 20, bgIntensity: 120, enterSpeed: 80, particleFx: "on", musicPulse: "on", pulseLevel: "heavy", stageMode: "on", lyricSize: 20, lyricLineHeight: 1.4, lyricActiveColor: "#1a1a1a", lyricHighlightShadow: "#e65100" },
+        ocean: { themeMode: "light", accent: "#1565c0", accent2: "#1565c0", bgSpeed: 14, bgIntensity: 85, enterSpeed: 90, particleFx: "on", musicPulse: "off", pulseLevel: "light", stageMode: "off", lyricSize: 16, lyricLineHeight: 1.7, lyricActiveColor: "#1a1a1a", lyricHighlightShadow: "#1565c0" },
+        mono: { themeMode: "light", accent: "#424242", accent2: "#424242", bgSpeed: 26, bgIntensity: 60, enterSpeed: 95, particleFx: "off", musicPulse: "off", pulseLevel: "light", stageMode: "off", lyricSize: 15, lyricLineHeight: 1.8, lyricActiveColor: "#1a1a1a", lyricHighlightShadow: "#424242" },
+      };
+
+      presetButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.getAttribute("data-preset");
+          const preset = presets[key];
+          if (!preset) return;
+          setControlsFromSkin(preset);
+          applySkin(preset);
+          saveSkin();
+        });
+      });
+    }
+
+    function setupThemeDrawer() {
+      themeToggleBtn.addEventListener("click", () => {
+        themeDrawer.classList.toggle("open");
+      });
+      document.addEventListener("click", (event) => {
+        if (!themeDrawer.classList.contains("open")) return;
+        const target = event.target;
+        if (!(target instanceof Node)) return;
+        if (themeDrawer.contains(target) || themeToggleBtn.contains(target)) return;
+        themeDrawer.classList.remove("open");
+      });
+    }
+
+    async function waitForTask(taskId, timeoutMs = 240000, onProgress = null) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        const resp = await fetch(`/api/tasks/${taskId}`);
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || "任务查询失败");
+        }
+        if (typeof onProgress === "function") {
+          onProgress(data.message || "");
+        }
+        if (data.status === "succeeded") {
+          return data.result || {};
+        }
+        if (data.status === "failed") {
+          throw new Error(data.error || "任务执行失败");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      throw new Error("任务超时，请稍后重试");
+    }
+
+    function renderHistory(items) {
+      historyListEl.innerHTML = "";
+      if (!items || items.length === 0) {
+        historyListEl.innerHTML = "<li>暂无历史记录</li>";
+        return;
+      }
+      for (const item of items) {
+        const title = item.output_song_title || item.input_song_title || item.song_title || "未命名歌曲";
+        const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : "-";
+        const alignmentText = formatAlignmentMode(item.alignment_mode || "");
+        const alignmentErr = item.alignment_error ? `（${item.alignment_error}）` : "";
+        const li = document.createElement("li");
+        li.className = "history-item";
+        li.innerHTML = `
+          <div style="flex: 1; min-width: 0;">
+            <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>${title}</strong> (${item.style_id || "-"})</div>
+            <div class="history-meta">${createdAt} · ${alignmentText}${alignmentErr}</div>
+          </div>
+          <div class="history-links" style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+            <a href="${item.audio_url}" target="_blank">播放</a>
+            <a href="${item.audio_url}" download="${item.filename || "song.mp3"}">下载</a>
+            <button class="btn-regen-lrc" data-filename="${item.filename}" style="padding: 2px 6px; font-size: 10px; background: var(--accent2); color: white; border-radius: 4px; border: none; cursor: pointer;">重新生成LRC</button>
+            <button class="btn-delete-history" data-filename="${item.filename}" style="padding: 2px 6px; font-size: 10px; background: var(--danger); color: white; border-radius: 4px; border: none; cursor: pointer;">删除</button>
+          </div>
+        `;
+        li.addEventListener("click", async (event) => {
+          const target = event.target;
+          if (target instanceof HTMLAnchorElement) return;
+
+          if (target.classList.contains("btn-delete-history")) {
+            event.stopPropagation();
+            const filename = target.getAttribute("data-filename");
+            if (confirm("确定要删除这条生成记录吗？")) {
+              try {
+                const resp = await fetch(`/api/history/${filename}`, { method: "DELETE" });
+                if (resp.ok) {
+                  setStatus("记录已删除");
+                  await refreshHistory();
+                } else {
+                  const data = await resp.json();
+                  setStatus(`删除失败：${data.detail}`, true);
+                }
+              } catch (err) {
+                setStatus(`删除失败：${err.message}`, true);
+              }
+            }
+            return;
+          }
+
+          if (target.classList.contains("btn-regen-lrc")) {
+            event.stopPropagation();
+            const filename = target.getAttribute("data-filename");
+            target.disabled = true;
+            target.textContent = "生成中...";
+            setStatus("正在重新生成 LRC 时间轴...", false, true);
+            try {
+              const resp = await fetch(`/api/history/${filename}/regenerate_lrc`, { method: "POST" });
+              if (resp.ok) {
+                const data = await resp.json();
+                setStatus("LRC 重新生成成功");
+                await refreshHistory();
+              } else {
+                const data = await resp.json();
+                setStatus(`生成失败：${data.detail}`, true);
+              }
+            } catch (err) {
+              setStatus(`生成失败：${err.message}`, true);
+            } finally {
+              target.disabled = false;
+              target.textContent = "重新生成LRC";
+            }
+            return;
+          }
+
+          keywordEl.value = item.keyword || "";
+          if (item.style_id) {
+            const styleExists = Array.from(styleEl.options).some((opt) => opt.value === item.style_id);
+            if (styleExists) styleEl.value = item.style_id;
+          }
+          customStylePromptEl.value = item.custom_style_prompt || "";
+          const mode = item.custom_style_mode === "override" ? "override" : "append";
+          customStyleModeEls.forEach((el) => {
+            el.checked = el.value === mode;
+          });
+          lyricsEl.value = item.lyrics || "";
+          songTitleEl.textContent = item.output_song_title || item.input_song_title || title;
+          styleTagsEl.textContent = item.style_tags || "-";
+
+          try {
+            const playable = await resolvePlayableAudio(item);
+            playerEl.src = playable.audioUrl;
+            downloadLinkEl.href = playable.audioUrl;
+            downloadLinkEl.download = playable.filename;
+            downloadLinkEl.style.display = "inline-block";
+            if (item.lyrics_lrc_url) {
+              downloadLrcLinkEl.href = item.lyrics_lrc_url;
+              downloadLrcLinkEl.download = playable.filename.replace(/\.mp3$/i, ".lrc");
+              downloadLrcLinkEl.style.display = "inline-block";
+            } else {
+              downloadLrcLinkEl.style.display = "none";
+            }
+            await loadTimelineFromJson(item.lyrics_json_url || "");
+            await tryPlayWithDebug();
+          } catch (error) {
+            downloadLinkEl.style.display = "none";
+            downloadLrcLinkEl.style.display = "none";
+            setStatus(`本地 mp3 不可用：${error.message}`, true);
+          }
+
+          document.querySelectorAll(".history-item.active").forEach((node) => node.classList.remove("active"));
+          li.classList.add("active");
+          setStatus(`已从历史记录回填（${alignmentText}）`);
+        });
+        historyListEl.appendChild(li);
+      }
+    }
+
+    async function refreshHistory() {
+      let localItems = [];
+      try {
+        const raw = localStorage.getItem(HISTORY_CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            localItems = parsed;
+            renderHistory(localItems);
+          }
+        }
+      } catch (error) {
+        // Ignore invalid local cache and fallback to API.
+      }
+
+      const resp = await fetch("/api/history?limit=10");
+      const data = await resp.json();
+      if (!resp.ok) return;
+      const items = Array.isArray(data.items) ? data.items : [];
+      const merged = (() => {
+        const map = new Map();
+        for (const it of localItems) {
+          const key = it.filename || it.audio_url || Math.random().toString();
+          map.set(key, it);
+        }
+        for (const it of items) {
+          const key = it.filename || it.audio_url || Math.random().toString();
+          map.set(key, it);
+        }
+        return Array.from(map.values()).sort((a, b) => {
+          const ta = new Date(a.created_at || 0).getTime();
+          const tb = new Date(b.created_at || 0).getTime();
+          return tb - ta;
+        }).slice(0, 10);
+      })();
+      renderHistory(merged);
+      try {
+        localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(merged));
+      } catch (error) {
+        // Ignore localStorage write failures.
+      }
+    }
+
+    async function canAccessAudio(url) {
+      try {
+        const resp = await fetch(url, { method: "HEAD" });
+        return resp.ok;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    async function resolvePlayableAudio(item) {
+      if (item.audio_url && await canAccessAudio(item.audio_url)) {
+        return { audioUrl: item.audio_url, filename: item.filename || "song.mp3" };
+      }
+      const resp = await fetch("/api/history?limit=10");
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error("接口刷新失败");
+      }
+      const items = Array.isArray(data.items) ? data.items : [];
+      try {
+        localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(items));
+      } catch (error) {
+        // Ignore localStorage write failures.
+      }
+      const matched = items.find((it) => it.filename && item.filename && it.filename === item.filename)
+        || items.find((it) => it.audio_url && it.audio_url === item.audio_url);
+      if (matched && matched.audio_url && await canAccessAudio(matched.audio_url)) {
+        return { audioUrl: matched.audio_url, filename: matched.filename || "song.mp3" };
+      }
+      throw new Error("未找到可访问的 mp3 文件");
+    }
+
+    function renderLyricsTimeline(lines) {
+      // 过滤空白行，修正异常时间轴
+      currentLyricsTimeline = (Array.isArray(lines) ? lines : [])
+        .filter((line) => line.text && line.text.trim() !== "")
+        .map((line, idx, arr) => {
+          const l = { ...line };
+          const next = arr[idx + 1];
+          if (next && Number(next.begin) < Number(l.begin)) {
+            next.begin = Number(l.begin) + 0.1;
+          }
+          return l;
+        });
+
+      if (currentLyricsTimeline.length === 0) {
+        lyricsSyncBoxEl.innerHTML = '<div class="lyrics-line" style="opacity: 1; transform: scale(1); filter: none;">暂无时间轴歌词</div>';
+        return;
+      }
+
+      lyricsSyncBoxEl.innerHTML = "";
+      currentLyricsTimeline.forEach((line, idx) => {
+        const div = document.createElement("div");
+        div.className = "lyrics-line";
+        div.textContent = line.text || "";
+        div.setAttribute("data-idx", idx);
+        div.setAttribute("data-begin", line.begin);
+        div.addEventListener("click", () => {
+          playerEl.currentTime = Number(line.begin);
+          playerEl.play().catch(() => null);
+        });
+        lyricsSyncBoxEl.appendChild(div);
+      });
+      lyricsSyncBoxEl._lastActiveIdx = -1;
+      lyricsSyncBoxEl.scrollTop = 0;
+    }
+
+    async function loadTimelineFromJson(jsonUrl) {
+      if (!jsonUrl) {
+        renderLyricsTimeline([]);
+        return;
+      }
+      try {
+        const resp = await fetch(jsonUrl);
+        if (!resp.ok) {
+          renderLyricsTimeline([]);
+          return;
+        }
+        const data = await resp.json();
+        renderLyricsTimeline(Array.isArray(data.lines) ? data.lines : []);
+      } catch (error) {
+        renderLyricsTimeline([]);
+      }
+    }
+
+    function updateLyricsActiveLine(currentTime) {
+      if (!currentLyricsTimeline.length) return;
+
+      const SPAN = 2;
+      let activeIndex = -1;
+      for (let i = 0; i < currentLyricsTimeline.length; i += 1) {
+        const begin = Number(currentLyricsTimeline[i].begin || 0);
+        const nextBegin = currentLyricsTimeline[i + 1] ? Number(currentLyricsTimeline[i + 1].begin) : Infinity;
+        if (currentTime >= begin && currentTime < nextBegin) {
+          activeIndex = i;
+          break;
+        }
+      }
+
+      const nodes = lyricsSyncBoxEl.querySelectorAll(".lyrics-line");
+      nodes.forEach((node, idx) => {
+        const inNearbyRange = activeIndex !== -1
+          && idx >= activeIndex - SPAN
+          && idx <= activeIndex + SPAN;
+
+        if (idx === activeIndex) {
+          node.classList.add("active");
+          node.classList.remove("nearby");
+          if (activeIndex !== (lyricsSyncBoxEl._lastActiveIdx ?? -1)) {
+            const boxHeight = lyricsSyncBoxEl.clientHeight;
+            const nodeOffsetTop = node.offsetTop;
+            const nodeHeight = node.clientHeight;
+            const targetScroll = nodeOffsetTop - (boxHeight / 2) + (nodeHeight / 2);
+            lyricsSyncBoxEl.scrollTo({ top: targetScroll, behavior: "smooth" });
+            lyricsSyncBoxEl._lastActiveIdx = activeIndex;
+          }
+        } else {
+          node.classList.remove("active");
+          if (inNearbyRange) {
+            node.classList.add("nearby");
+          } else {
+            node.classList.remove("nearby");
+          }
+        }
+      });
+    }
+
+    btnLyrics.addEventListener("click", async () => {
+      const keyword = keywordEl.value.trim();
+      if (!keyword) {
+        setStatus("请先输入关键词", true);
+        return;
+      }
+
+      btnLyrics.disabled = true;
+      setStatus("歌词生成中...", false, true);
+      try {
+        const task = await postJSON("/api/tasks/lyrics", {
+          keyword,
+          style_id: styleEl.value,
+        });
+        const data = await waitForTask(task.task_id, 240000, (message) => {
+          if (message) setStatus(message, false, true);
+        });
+        lyricsEl.value = data.lyrics || "";
+        songTitleEl.textContent = data.song_title || "-";
+        styleTagsEl.textContent = data.style_tags || "-";
+        setStatus("歌词生成完成");
+      } catch (err) {
+        setStatus(`歌词生成失败：${err.message}`, true);
+      } finally {
+        btnLyrics.disabled = false;
+      }
+    });
+
+    btnMusic.addEventListener("click", async () => {
+      const lyrics = lyricsEl.value.trim();
+      const customStyleMode = Array.from(customStyleModeEls).find((el) => el.checked)?.value || "append";
+      if (!lyrics) {
+        setStatus("请先生成或输入歌词", true);
+        return;
+      }
+      btnMusic.disabled = true;
+      setStatus("歌曲生成中，可能需要几十秒...", false, true);
+      try {
+        const task = await postJSON("/api/tasks/music", {
+          lyrics,
+          style_id: styleEl.value,
+          custom_style_prompt: customStylePromptEl.value.trim(),
+          custom_style_mode: customStyleMode,
+          keyword: keywordEl.value.trim(),
+          song_title: songTitleEl.textContent === "-" ? "" : songTitleEl.textContent,
+          style_tags: styleTagsEl.textContent === "-" ? "" : styleTagsEl.textContent,
+        });
+        const data = await waitForTask(task.task_id, 360000, (message) => {
+          if (message) setStatus(message, false, true);
+        });
+        playerEl.src = data.audio_url;
+        downloadLinkEl.href = data.audio_url;
+        downloadLinkEl.download = data.filename || "song.mp3";
+        downloadLinkEl.style.display = "inline-block";
+        if (data.lyrics_lrc_url) {
+          downloadLrcLinkEl.href = data.lyrics_lrc_url;
+          downloadLrcLinkEl.download = (data.filename || "song.mp3").replace(/\.mp3$/i, ".lrc");
+          downloadLrcLinkEl.style.display = "inline-block";
+        } else {
+          downloadLrcLinkEl.style.display = "none";
+        }
+        if (Array.isArray(data.lyrics_timeline) && data.lyrics_timeline.length > 0) {
+          renderLyricsTimeline(data.lyrics_timeline);
+        } else {
+          await loadTimelineFromJson(data.lyrics_json_url || "");
+        }
+        await tryPlayWithDebug();
+        await setupAudioPulse();
+        await refreshHistory();
+        const modeText = formatAlignmentMode(data.alignment_mode || "");
+        const modeErr = data.alignment_error ? `：${data.alignment_error}` : "";
+        setStatus(`歌曲生成成功，可在线播放（${modeText}${modeErr}）`);
+      } catch (err) {
+        downloadLinkEl.style.display = "none";
+        downloadLrcLinkEl.style.display = "none";
+        setStatus(`歌曲生成失败：${err.message}`, true);
+      } finally {
+        btnMusic.disabled = false;
+      }
+    });
+
+    setupSkin();
+    setupThemeDrawer();
+    initParticles();
+    playerEl.addEventListener("play", () => { tryPlayWithDebug(); setupAudioPulse().catch(() => null); });
+    playerEl.addEventListener("timeupdate", () => {
+      updateLyricsActiveLine(playerEl.currentTime || 0);
+    });
+    renderLyricsTimeline([]);
+    refreshHistory();
+
+    // ---- 音频调试开关 ----
+    const debugBtn = document.createElement("button");
+    debugBtn.textContent = "🔊 音频调试";
+    debugBtn.style.cssText = "position:fixed;bottom:12px;left:12px;z-index:9999;padding:6px 10px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;";
+    debugBtn.title = "点击开启/关闭音频调试模式";
+    document.body.appendChild(debugBtn);
+    debugBtn.addEventListener("click", () => {
+      audioDebugMode = !audioDebugMode;
+      if (audioDebugMode) {
+        initAudioDebugCanvas();
+        debugBtn.textContent = "🔇 关闭调试";
+        setStatus("音频调试已开启 - 屏幕右下角显示频谱，右键画布可关闭");
+      } else {
+        debugBtn.textContent = "🔊 音频调试";
+        if (volumeVisualizerId) cancelAnimationFrame(volumeVisualizerId);
+        if (volumeVisualizerCanvas) {
+          volumeVisualizerCanvas.remove();
+          volumeVisualizerCanvas = null;
+        }
+        setStatus("音频调试已关闭");
+      }
+    });
+  </script>
+</body>
+</html>
