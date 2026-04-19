@@ -60,7 +60,7 @@ def main():
     
     # Create window
     window = webview.create_window(
-        title='AI 音乐生成器 - 景德镇',
+        title='AI 音乐生成器 - Wayne Sun',
         url='http://127.0.0.1:8000',
         width=1024,
         height=768,
