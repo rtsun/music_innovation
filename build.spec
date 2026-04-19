@@ -8,6 +8,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('app/templates', 'app/templates'),
+        ('app/static', 'app/static'),
         ('config/styles.yaml', 'config'),
         ('.env.example', '.'),
     ],
