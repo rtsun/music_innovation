@@ -1,0 +1,9 @@
+fastapi
+httpx
+jinja2
+numpy
+pydantic-settings
+PyYAML
+uvicorn[standard]
+pywebview
+pyinstaller
