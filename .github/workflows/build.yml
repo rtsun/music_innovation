@@ -12,15 +12,13 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4.2.2
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v5.3.0
       with:
         python-version: '3.11'
         cache: 'pip'
@@ -53,7 +51,7 @@ jobs:
       shell: powershell
 
     - name: Upload EXE artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v4.6.1
       with:
         name: Music-Innovation-Windows-App
         path: dist/Music_Innovation_App/
